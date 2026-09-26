@@ -160,7 +160,7 @@ bun run build
 Link the package locally:
 
 ```bash
-cd packages/destructive-check-plugin
+cd destructive-check-plugin
 bun link
 cd /your/opencode/project
 bun link @sureshsankaran/destructive-check-plugin
@@ -176,11 +176,41 @@ Add to your `opencode.json`:
 
 ## How It Works
 
-The plugin uses three hooks:
+The plugin ships a **dual OpenCode v1 + v2 entrypoint** from a single package
+(`src/index.ts` exports `{ id, server, setup }`). OpenCode picks the one it
+understands:
+
+- **OpenCode 1.18.29+** reads the object form and calls `server` (classic v1 API)
+- **OpenCode 2.x** reads the object form and calls `setup` (`@opencode/plugin` API)
+
+Both paths share the same detection logic (`src/detect.ts`) — only hook
+registration and payload shapes differ. Minimum versions: OpenCode 1.18.29 for
+the v1 path, OpenCode 2.0.0 for the v2 path.
+
+### v1 hooks (`src/v1.ts`)
 
 1. **`tool.execute.before`**: Logs warnings when destructive commands are detected
 2. **`permission.ask`**: Intercepts permission requests and flags destructive operations
 3. **`tool.execute.after`**: Logs completion and any system blocks
+
+### v2 hooks (`src/v2.ts`)
+
+| v1 hook | v2 equivalent | Notes |
+|---|---|---|
+| `tool.execute.before` | `ctx.tool.hook("execute.before")` | Warn-only, same as v1 |
+| `tool.execute.after` | `ctx.tool.hook("execute.after")` | Output normalized: `result.output` can be a string **or** an object in v2 — it is stringified defensively and the handler never throws |
+| `permission.ask` (`output.status = "ask"`) | `ctx.permission.hook("evaluate")` (`event.effect = "ask"`) | **Direct v2 equivalent** — no new OpenCode API needed. The handler also sets `event.message`, which surfaces in the permission prompt UI |
+
+The custom `destructive-check-status` tool is registered via `ctx.tool.transform`
+in v2 (parity with v1).
+
+## Development
+
+```bash
+bun install
+bun test        # 90+ tests against the real detection module
+bun run typecheck
+```
 
 ## License
 
@@ -188,4 +218,5 @@ MIT
 
 ## Contributing
 
-Issues and pull requests are welcome at [github.com/anomalyco/opencode](https://github.com/anomalyco/opencode).
+Issues and pull requests are welcome at
+[github.com/sureshsankaran/destructive-check-plugin](https://github.com/sureshsankaran/destructive-check-plugin).
